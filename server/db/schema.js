@@ -87,11 +87,6 @@ function initializeDatabase() {
 
   // Seed default config
   const configData = [
-    ['easy_qualify_score', '100'],
-    ['medium_qualify_score', '250'],
-    ['easy_time_minutes', '20'],
-    ['medium_time_minutes', '30'],
-    ['hard_time_minutes', '40'],
     ['first_blood_bonus', '50'],
     ['speed_bonus', '20'],
     ['speed_bonus_minutes', '5'],
@@ -99,7 +94,6 @@ function initializeDatabase() {
     ['competition_active', '1'],
     ['registration_open', '1'],
   ];
-
   const insertConfig = db.prepare(`INSERT OR IGNORE INTO competition_config (key, value) VALUES (?, ?)`);
   for (const [k, v] of configData) insertConfig.run(k, v);
 
@@ -110,17 +104,22 @@ function initializeDatabase() {
     db.prepare(`INSERT INTO teams (name, pin_hash, is_admin) VALUES ('admin', ?, 1)`).run(hash);
   }
 
-  // Seed sample challenges
+  // Seed challenges — clear and re-seed if not exactly 6 (our current set)
   const challengeCount = db.prepare(`SELECT COUNT(*) as count FROM challenges`).get();
-  if (challengeCount.count === 0) {
+  if (challengeCount.count !== 6) {
+    db.prepare(`DELETE FROM challenges`).run();
+
     const challenges = [
-      // Round 1 - Easy
       {
-        title: 'Shadow Initiation',
-        description: 'Decode the secret message hidden in plain sight. The vault masters have left a trail for new initiates.',
-        story: 'You receive a cryptic note slipped under your door at 3AM. It reads: "The truth is encoded in the base of all digital knowledge." A string of characters follows: `ZmxhZ3toM2xsb193MHJsZH0=`',
-        hints: JSON.stringify(['Think about common encoding schemes', 'Base64 is widely used in the digital world', 'Use an online decoder or Python: base64.b64decode()']),
-        flag: 'flag{h3llo_w0rld}',
+        title: 'Warmup: Encoded Not Encrypted',
+        description: `Not everything that looks secret is actually encrypted. Some things are just encoded — meaning the "hidden" data can be reversed by anyone who knows the format.\n\nThis is Base64, one of the most common encodings on the internet.\n\nDecode it to find your first flag:\n\n\`Q1RGe2gzbGxvX2NyeXB0MGdyNHBoeX0=\``,
+        story: 'The vault door has a simple keypad. A message on the wall reads: "Not everything hidden is truly secret — some doors just need the right decoder."',
+        hints: JSON.stringify([
+          'Base64 uses characters A-Z, a-z, 0-9, +, / and ends with = padding',
+          'Use CyberChef → "From Base64" operation',
+          'Or in Python: import base64; base64.b64decode("Q1RGe2gzbGxvX2NyeXB0MGdyNHBoeX0=").decode()',
+        ]),
+        flag: 'CTF{h3llo_crypt0gr4phy}',
         points: 50,
         difficulty: 'easy',
         category: 'Cryptography',
@@ -128,102 +127,88 @@ function initializeDatabase() {
         order_in_round: 1,
       },
       {
-        title: 'Digital Phantom',
-        description: 'Something is hidden inside this image. Find what the phantom left behind.',
-        story: 'An encrypted photo arrives from an unknown agent. "Look deeper than what the eye can see," the message says. "The phantom hides in the metadata." Check the image carefully — the flag is embedded within.',
-        hints: JSON.stringify(['Try using steganography tools', 'exiftool can reveal hidden metadata', 'strings command might help on Linux']),
-        flag: 'flag{ph4nt0m_1n_th3_b1ts}',
-        points: 50,
+        title: 'Shift Happens',
+        description: `The Caesar cipher shifts every letter forward by a fixed number in the alphabet. A shift of 1 turns A into B, B into C, and so on. Numbers and symbols stay the same.\n\nThis message was shifted by an unknown amount between 1 and 25. Try each shift until English words appear.\n\n\`HYK{h4jxfw_hnumjwx_xmnky_qjyyjwx}\``,
+        story: 'An ancient Roman cipher guards the next vault chamber. Julius Caesar himself would be proud — but modern hackers have better tools.',
+        hints: JSON.stringify([
+          'There are only 25 possible shifts — try them all (brute force)',
+          'Use CyberChef → "ROT13" or "Caesar Cipher Decode" with different offsets',
+          'The flag format is CTF{...} — look for that pattern after decoding',
+          'Hint: the shift used was 5',
+        ]),
+        flag: 'CTF{c4esar_ciphers_shift_letters}',
+        points: 75,
         difficulty: 'easy',
-        category: 'Steganography',
+        category: 'Cryptography',
         round_number: 1,
         order_in_round: 2,
       },
       {
-        title: 'Port Scanner\'s Creed',
-        description: 'A service is running on a mysterious server. Find the open port and the secret it guards.',
-        story: 'Your handler sends coordinates: "Target IP: 10.0.0.1". Your mission is to discover what secrets lie behind its open ports. Run a scan. Listen carefully. The vault sends its greetings on port 1337.',
-        hints: JSON.stringify(['Use nmap to scan open ports', 'nc (netcat) can connect to open ports', 'Try: nmap -sV -p- target_ip']),
-        flag: 'flag{p0rts_t3ll_s3cr3ts}',
-        points: 50,
+        title: 'Base Instincts',
+        description: `Hexadecimal represents data using only 0-9 and A-F, with every 2 characters representing one byte (one character of the original text).\n\nConvert this hex string back to readable text:\n\n\`4354467b6865785f69735f6a7573745f616e6f746865725f626173657d\``,
+        story: 'A hex dump is displayed on a cracked monitor deep inside the vault. The numbers seem random — but everything has meaning if you know how to read it.',
+        hints: JSON.stringify([
+          'Every 2 hex characters = 1 ASCII character (e.g., 43 = "C", 54 = "T", 46 = "F")',
+          'Use CyberChef → "From Hex" operation',
+          'Or in Python: bytes.fromhex("4354467b...").decode()',
+        ]),
+        flag: 'CTF{hex_is_just_another_base}',
+        points: 100,
         difficulty: 'easy',
-        category: 'Networking',
+        category: 'Cryptography',
         round_number: 1,
         order_in_round: 3,
       },
-      // Round 2 - Medium
       {
-        title: 'The Cipher Labyrinth',
-        description: 'Multiple layers of encryption protect this secret. Peel them one by one to reach the flag.',
-        story: 'Deep in the vault archives lies a message triple-encrypted by the ghost of a paranoid cryptographer. Your analyst notes: "First layer: Caesar. Second: Vigenère with key \'VAULT\'. Third: ROT13." The ciphertext awaits.',
-        hints: JSON.stringify(['Caesar cipher shifts by a fixed number — try brute force', 'Vigenère needs the key: VAULT', 'ROT13 is its own inverse', 'Use CyberChef for multi-step decryption']),
-        flag: 'flag{labyR1nth_0f_c1ph3rs}',
-        points: 100,
+        title: 'Two Steps Back',
+        description: `One layer of protection is rarely enough. This message went through TWO transformations. Figure out which one was applied last, undo it first, then undo the other.\n\n\`}frjpya_lyh_nupkvjul_mv_zylfhs{MAJ\``,
+        story: 'The vault architect was paranoid — one cipher was never enough. You must unpeel each layer carefully, like an onion of secrets.',
+        hints: JSON.stringify([
+          'Work backwards: the LAST thing applied must be undone FIRST',
+          'Notice anything about the string structure? Try reversing it first',
+          'After reversing, you should recognise a shifted cipher — try Caesar shifts',
+          'The Caesar shift used was 7',
+        ]),
+        flag: 'CTF{layers_of_encoding_are_tricky}',
+        points: 125,
         difficulty: 'medium',
         category: 'Cryptography',
-        round_number: 2,
-        order_in_round: 1,
+        round_number: 1,
+        order_in_round: 4,
       },
       {
-        title: 'SQL Shadow',
-        description: 'A login form guards a secret database. Shadows of injected queries may reveal the truth.',
-        story: 'You discover an old admin portal at shadow.vault.local. The login looks familiar... too familiar. "Never trust user input," your mentor once said. The admin\'s password holds the flag.',
-        hints: JSON.stringify(['SQL injection is the key', "Try: ' OR '1'='1", 'The flag is stored in the users table', "UNION SELECT might help: ' UNION SELECT flag FROM secrets--"]),
-        flag: 'flag{sql_1nj3ct10n_m4st3r}',
-        points: 100,
+        title: 'The Keyword',
+        description: `Unlike Caesar's single fixed shift, the Vigenere cipher uses a KEYWORD, where each letter of the keyword determines a different shift amount for each letter of the message. This is why it resisted simple brute-forcing for centuries.\n\nKeyword: \`CIPHER\`\n\nDecrypt this message:\n\`EBU{cmxgvtyi_egmsz_e_bgglvvu}\``,
+        story: 'A sealed envelope marked "For Your Eyes Only" contains a message. The keyword was whispered to you by a contact at the last dead drop: CIPHER.',
+        hints: JSON.stringify([
+          'Each letter of the keyword shifts the corresponding message letter by a different amount',
+          'C=2, I=8, P=15, H=7, E=4, R=17 (positions in alphabet, 0-indexed)',
+          'Use CyberChef → "Vigenere Decode" with key: CIPHER',
+          'Or use an online Vigenere decoder: https://www.dcode.fr/vigenere-cipher',
+        ]),
+        flag: 'CTF{vigenere_needs_a_keyword}',
+        points: 150,
         difficulty: 'medium',
-        category: 'Web Exploitation',
-        round_number: 2,
-        order_in_round: 2,
+        category: 'Cryptography',
+        round_number: 1,
+        order_in_round: 5,
       },
       {
-        title: 'Memory Forensics',
-        description: 'A memory dump from a compromised machine holds crucial evidence. Dig through the digital mind.',
-        story: 'An agent was compromised. Before the machine was destroyed, a memory dump was captured. Volatility is your scalpel. The flag lives somewhere in process memory — find it before the trail goes cold.',
-        hints: JSON.stringify(['Use Volatility framework for memory forensics', 'Start with: volatility -f dump.mem imageinfo', 'Try: volatility cmdline or volatility pslist', 'strings dump.mem | grep flag{ might work too']),
-        flag: 'flag{m3m0ry_n3v3r_l13s}',
-        points: 100,
-        difficulty: 'medium',
-        category: 'Forensics',
-        round_number: 2,
-        order_in_round: 3,
-      },
-      // Round 3 - Hard
-      {
-        title: 'Zero-Day Phantom',
-        description: 'A vulnerable binary awaits. Exploit the buffer overflow to gain control and retrieve the flag.',
-        story: 'The final guardian of the vault is a 32-bit binary compiled without stack canaries. "Overflow the buffer. Control the instruction pointer. Redirect execution to the secret function." This is the last test of a true vault master.',
-        hints: JSON.stringify(['Use gdb or pwndbg to analyze the binary', 'Find the offset with a cyclic pattern', 'Identify the win() function address', 'Python pwntools makes exploitation elegant']),
-        flag: 'flag{buff3r_0v3rfl0w_g0d}',
-        points: 200,
+        title: 'The Final Layer',
+        description: `Real-world obfuscation often stacks multiple techniques together. This flag went through THREE separate transformations, applied in this order:\n1. Caesar shift\n2. Base64 encoding\n3. Hex encoding\n\nWork backward through all three layers to recover the flag.\n\n\`5231684b65334635634868745833426c59326c325832643259335234633139746431397165584a39\``,
+        story: "The vault master's final message is protected by three locks. Only a true cryptographer can peel all three layers and claim the ultimate flag.",
+        hints: JSON.stringify([
+          'Undo in REVERSE order: hex -> base64 -> Caesar',
+          'Step 1: Convert hex to text (use CyberChef "From Hex")',
+          'Step 2: Decode the result from Base64 (use CyberChef "From Base64")',
+          'Step 3: Try different Caesar shifts on the result until you see CTF{...',
+        ]),
+        flag: 'CTF{multi_layer_crypto_is_fun}',
+        points: 250,
         difficulty: 'hard',
-        category: 'Binary Exploitation',
-        round_number: 3,
-        order_in_round: 1,
-      },
-      {
-        title: 'Reverse the Architect',
-        description: 'A compiled binary holds a secret algorithm. Reverse engineer it to find the valid input that produces the flag.',
-        story: 'The vault architect left behind a custom verification program. It checks an input and either prints the flag or denies you. No source code exists. Only the binary. Disassemble. Understand. Conquer.',
-        hints: JSON.stringify(['Use Ghidra or IDA for static analysis', 'Look for strcmp or custom comparison functions', 'Dynamic analysis with gdb can reveal the check', 'The algorithm is a simple XOR with a static key']),
-        flag: 'flag{r3v3rs3_3ng1n33r1ng_pr0}',
-        points: 200,
-        difficulty: 'hard',
-        category: 'Reverse Engineering',
-        round_number: 3,
-        order_in_round: 2,
-      },
-      {
-        title: 'The Final Protocol',
-        description: 'Decrypt the intercepted network traffic. The vault\'s master key is buried in the packets.',
-        story: 'You intercept the final transmission between the vault master and their handler. A PCAP file captures the encrypted exchange. Break the weak encryption. Reconstruct the session. The flag is the vault\'s ultimate secret — the master key that unlocks everything.',
-        hints: JSON.stringify(['Use Wireshark to analyze the PCAP', 'Look for TLS handshakes and exported keys', 'Follow TCP streams to reassemble sessions', 'The encryption is RC4 with a 4-digit key — brute force it']),
-        flag: 'flag{m4st3r_k3y_unl0ck3d}',
-        points: 200,
-        difficulty: 'hard',
-        category: 'Network Forensics',
-        round_number: 3,
-        order_in_round: 3,
+        category: 'Cryptography',
+        round_number: 1,
+        order_in_round: 6,
       },
     ];
 
