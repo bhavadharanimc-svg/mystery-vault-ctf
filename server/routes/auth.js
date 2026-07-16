@@ -7,7 +7,7 @@ const { JWT_SECRET } = require('../middleware/auth');
 const router = express.Router();
 
 // Team Login
-router.post('/login', (req, res) => {
+router.post('/login', async (req, res) => {
   try {
     const { name, pin } = req.body;
     if (!name || !pin) return res.status(400).json({ error: 'Team name and PIN required' });
@@ -16,7 +16,7 @@ router.post('/login', (req, res) => {
     const team = db.prepare(`SELECT * FROM teams WHERE name = ?`).get(name.trim());
     if (!team) return res.status(401).json({ error: 'Team not found' });
 
-    const valid = bcrypt.compareSync(String(pin), team.pin_hash);
+    const valid = await bcrypt.compare(String(pin), team.pin_hash);
     if (!valid) return res.status(401).json({ error: 'Invalid PIN' });
 
     if (team.is_admin) return res.status(403).json({ error: 'Use admin login for admin accounts' });
@@ -44,7 +44,7 @@ router.post('/login', (req, res) => {
 });
 
 // Admin Login
-router.post('/admin', (req, res) => {
+router.post('/admin', async (req, res) => {
   try {
     const { name, pin } = req.body;
     if (!name || !pin) return res.status(400).json({ error: 'Name and PIN required' });
@@ -53,7 +53,7 @@ router.post('/admin', (req, res) => {
     const team = db.prepare(`SELECT * FROM teams WHERE name = ? AND is_admin = 1`).get(name.trim());
     if (!team) return res.status(401).json({ error: 'Admin not found' });
 
-    const valid = bcrypt.compareSync(String(pin), team.pin_hash);
+    const valid = await bcrypt.compare(String(pin), team.pin_hash);
     if (!valid) return res.status(401).json({ error: 'Invalid PIN' });
 
     const token = jwt.sign(
@@ -82,7 +82,7 @@ router.get('/verify', (req, res) => {
 });
 
 // Team Self-Registration
-router.post('/register', (req, res) => {
+router.post('/register', async (req, res) => {
   try {
     const { name, pin } = req.body;
 
@@ -113,7 +113,8 @@ router.post('/register', (req, res) => {
       return res.status(409).json({ error: 'Team name already taken. Choose another.' });
     }
 
-    const hash = bcrypt.hashSync(String(pin), 10);
+    // Cost 8 = ~40ms per hash (vs 100ms at cost 10) — still secure for a 4-digit PIN
+    const hash = await bcrypt.hash(String(pin), 8);
     const result = db.prepare(
       `INSERT INTO teams (name, pin_hash) VALUES (?, ?)`
     ).run(trimmedName, hash);
