@@ -1,0 +1,14 @@
+{
+  "name": "mystery-vault-ctf",
+  "version": "1.0.0",
+  "description": "Mystery Vault CTF Platform",
+  "scripts": {
+    "build": "npm install --prefix server && npm install --prefix client && npm run build --prefix client",
+    "start": "node server/index.js",
+    "dev:server": "node server/index.js",
+    "dev:client": "npm run dev --prefix client"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
