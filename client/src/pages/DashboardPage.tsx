@@ -3,32 +3,25 @@ import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import toast from 'react-hot-toast';
-import { Lock, Unlock, Trophy } from 'lucide-react';
+import { Trophy, Shield } from 'lucide-react';
 import type { Challenge } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 import Navbar from '../components/Navbar';
 import ChallengeCard from '../components/ChallengeCard';
-import RoundTimer from '../components/RoundTimer';
 import AchievementBadge from '../components/AchievementBadge';
 import ParticleField from '../components/ParticleField';
 import TerminalText from '../components/TerminalText';
 
-const ROUNDS = [
-  { num: 1, name: 'EASY', label: 'Round 1 — Easy', color: 'cyan', borderColor: 'border-cyan-400/30', textColor: 'text-cyan-400', bgColor: 'bg-cyan-400/5' },
-  { num: 2, name: 'MEDIUM', label: 'Round 2 — Medium', color: 'yellow', borderColor: 'border-yellow-400/30', textColor: 'text-yellow-400', bgColor: 'bg-yellow-400/5' },
-  { num: 3, name: 'HARD', label: 'Round 3 — Hard', color: 'red', borderColor: 'border-red-400/30', textColor: 'text-red-400', bgColor: 'bg-red-400/5' },
-];
+const DIFFICULTY_ORDER: Record<string, number> = { easy: 0, medium: 1, hard: 2 };
 
 export default function DashboardPage() {
   const { team, refreshTeam } = useAuth();
   const { socket } = useSocket();
   const navigate = useNavigate();
   const [challenges, setChallenges] = useState<Challenge[]>([]);
-  const [teamRound, setTeamRound] = useState(1);
   const [rank, setRank] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
-
 
   const fetchData = useCallback(async () => {
     try {
@@ -36,8 +29,11 @@ export default function DashboardPage() {
         axios.get('/api/challenges'),
         axios.get('/api/teams/me'),
       ]);
-      setChallenges(challengeRes.data.challenges);
-      setTeamRound(challengeRes.data.team_round);
+      // Sort by points ascending
+      const sorted = [...challengeRes.data.challenges].sort(
+        (a: Challenge, b: Challenge) => a.points - b.points
+      );
+      setChallenges(sorted);
       setRank(teamRes.data.rank);
       refreshTeam();
     } catch {
@@ -47,32 +43,18 @@ export default function DashboardPage() {
     }
   }, []);
 
-  useEffect(() => {
-    fetchData();
-  }, []);
+  useEffect(() => { fetchData(); }, []);
 
   useEffect(() => {
     if (!socket) return;
     socket.on('leaderboard:update', fetchData);
-    socket.on('round:unlock', ({ round }: { round: number }) => {
-      toast.success(`🔓 Round ${round} Unlocked!`, { duration: 5000 });
-      fetchData();
-    });
-    return () => {
-      socket.off('leaderboard:update');
-      socket.off('round:unlock');
-    };
+    return () => { socket.off('leaderboard:update', fetchData); };
   }, [socket]);
 
-  const getChallengesForRound = (round: number) =>
-    challenges.filter(c => c.round_number === round).sort((a, b) => a.order_in_round - b.order_in_round);
-
-  const getSolvedForRound = (round: number) =>
-    getChallengesForRound(round).filter(c => c.is_solved).length;
-
   const totalSolved = challenges.filter(c => c.is_solved).length;
-  const maxScore = 150 + 300 + 600;
-  const progressPct = Math.min(100, ((team?.score || 0) / maxScore) * 100);
+  const totalChallenges = challenges.length;
+  const maxScore = challenges.reduce((sum, c) => sum + c.points, 0);
+  const progressPct = maxScore > 0 ? Math.min(100, ((team?.score || 0) / maxScore) * 100) : 0;
 
   if (loading) {
     return (
@@ -93,6 +75,7 @@ export default function DashboardPage() {
       <Navbar />
 
       <div className="relative z-10 max-w-6xl mx-auto px-4 py-8 space-y-8">
+
         {/* Welcome Banner */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
@@ -108,7 +91,9 @@ export default function DashboardPage() {
               <h1 className="text-3xl md:text-4xl font-black text-white mb-1">
                 Welcome, <span className="gradient-text">{team?.name}</span>
               </h1>
-              <p className="text-gray-400 text-sm font-terminal">Your mission: capture all flags before time runs out.</p>
+              <p className="text-gray-400 text-sm font-terminal">
+                Your mission: capture all flags. All challenges are open — start anywhere.
+              </p>
             </div>
             <div className="flex gap-4">
               <div className="glass-purple rounded-xl p-4 text-center min-w-[90px]">
@@ -120,7 +105,9 @@ export default function DashboardPage() {
                 <div className="font-terminal text-xs text-cyan-400/60 uppercase">Rank</div>
               </div>
               <div className="glass rounded-xl p-4 text-center min-w-[90px]">
-                <div className="font-terminal text-2xl font-black text-yellow-300">{totalSolved}/9</div>
+                <div className="font-terminal text-2xl font-black text-yellow-300">
+                  {totalSolved}/{totalChallenges}
+                </div>
                 <div className="font-terminal text-xs text-yellow-400/60 uppercase">Solved</div>
               </div>
             </div>
@@ -165,74 +152,38 @@ export default function DashboardPage() {
           </motion.button>
         </div>
 
-        {/* Rounds */}
-        {ROUNDS.map(round => {
-          const roundChallenges = getChallengesForRound(round.num);
-          const solved = getSolvedForRound(round.num);
-          const isLocked = round.num > teamRound;
-          const isComplete = solved === 3 && roundChallenges.length === 3;
+        {/* Challenges — flat grid sorted by points */}
+        <div>
+          <div className="flex items-center gap-3 mb-5">
+            <Shield className="w-5 h-5 text-cyan-400" />
+            <h2 className="font-terminal text-lg text-white font-bold">
+              Challenges
+            </h2>
+            <span className="font-terminal text-xs text-gray-500">
+              {totalSolved} of {totalChallenges} captured
+            </span>
+          </div>
 
-          return (
-            <motion.div
-              key={round.num}
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: (round.num - 1) * 0.1 }}
-              className={`rounded-2xl border overflow-hidden ${round.borderColor} ${isLocked ? 'opacity-60' : ''}`}
-            >
-              {/* Round header */}
-              <div className={`${round.bgColor} px-6 py-4 flex items-center justify-between border-b ${round.borderColor}`}>
-                <div className="flex items-center gap-3">
-                  {isLocked
-                    ? <Lock className={`w-5 h-5 ${round.textColor}`} />
-                    : <Unlock className={`w-5 h-5 ${round.textColor}`} />
-                  }
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h2 className={`font-terminal font-bold text-lg ${round.textColor}`}>{round.label}</h2>
-                      {isLocked && <span className="px-2 py-0.5 text-xs font-terminal bg-gray-800 text-gray-500 rounded">LOCKED</span>}
-                      {isComplete && <span className="px-2 py-0.5 text-xs font-terminal bg-green-500/20 text-green-400 rounded border border-green-500/30">✓ COMPLETE</span>}
-                    </div>
-                    <div className="font-terminal text-xs text-gray-500">
-                      {solved}/{roundChallenges.length} challenges solved
-                      {' • '}
-                      {round.num === 1 ? '50' : round.num === 2 ? '100' : '200'} pts each
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="flex gap-1">
-                    {Array.from({ length: 3 }).map((_, i) => (
-                      <div key={i} className={`w-2.5 h-2.5 rounded-full ${i < solved ? 'bg-green-400' : 'bg-gray-700'}`} />
-                    ))}
-                  </div>
-                </div>
-              </div>
+          {challenges.length === 0 ? (
+            <div className="glass rounded-2xl p-12 text-center font-terminal text-gray-600">
+              No challenges available yet.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {challenges.map((c, i) => (
+                <motion.div
+                  key={c.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.07 }}
+                >
+                  <ChallengeCard challenge={c} locked={false} index={i} />
+                </motion.div>
+              ))}
+            </div>
+          )}
+        </div>
 
-              {/* Timer for active round */}
-              {!isLocked && round.num === teamRound && (
-                <div className="px-6 pt-4">
-                  <RoundTimer round={round.num} onExpire={() => toast.error(`⏰ Round ${round.num} time expired!`, { duration: 10000 })} />
-                </div>
-              )}
-
-              {/* Challenge grid */}
-              <div className="p-6 grid grid-cols-1 md:grid-cols-3 gap-4">
-                {isLocked
-                  ? Array.from({ length: 3 }).map((_, i) => (
-                      <div key={i} className="glass rounded-xl p-5 border border-gray-800 flex flex-col items-center justify-center gap-2 min-h-[140px] opacity-40">
-                        <Lock className="w-8 h-8 text-gray-600" />
-                        <span className="font-terminal text-xs text-gray-600">Challenge {i + 1}</span>
-                      </div>
-                    ))
-                  : roundChallenges.map((c, i) => (
-                      <ChallengeCard key={c.id} challenge={c} locked={false} index={i} />
-                    ))
-                }
-              </div>
-            </motion.div>
-          );
-        })}
       </div>
     </div>
   );
