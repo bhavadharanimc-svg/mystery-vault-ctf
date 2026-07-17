@@ -9,10 +9,10 @@ const { adminMiddleware } = require('../middleware/auth');
 
 const router = express.Router();
 
-// File upload config
+// File upload config — path set by index.js (supports Railway volume)
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    const uploadPath = path.join(__dirname, '..', 'uploads');
+    const uploadPath = req.app.get('uploadPath') || path.join(__dirname, '..', 'uploads');
     if (!fs.existsSync(uploadPath)) fs.mkdirSync(uploadPath, { recursive: true });
     cb(null, uploadPath);
   },

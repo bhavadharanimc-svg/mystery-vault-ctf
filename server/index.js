@@ -32,8 +32,11 @@ app.use(cors({ origin: '*' }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Static uploads
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// Static uploads — use persistent volume path in production
+const UPLOAD_PATH = process.env.UPLOAD_PATH || path.join(__dirname, 'uploads');
+if (!require('fs').existsSync(UPLOAD_PATH)) require('fs').mkdirSync(UPLOAD_PATH, { recursive: true });
+app.use('/uploads', express.static(UPLOAD_PATH));
+app.set('uploadPath', UPLOAD_PATH);
 
 // Initialize DB
 getDb();
